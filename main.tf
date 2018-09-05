@@ -1,10 +1,47 @@
 module "scaffold" {
-    source      = "/usr/richard/clouddrive/citadel-terraform/modules/scaffold"
-    tenant_id   = "${var.tenant_id}"
-    object_id   = "${var.object_id}"
+  # source    = "/mnt/c/Users/richeney/git/terraform-scaffold-module"
+  source    = "github.com/richeney/terraform-scaffold-module"
 }
 
-output "VpnGatewayPipAddress" {
+resource "azurerm_resource_group" "webapps" {
+    name        = "webapps"
+    location    = "${var.loc}"
+    tags        = "${var.tags}"
+}
 
-    value = "${module.scaffold.vpnGwPipAddress}"
+resource "random_string" "webapprnd" {
+  length  = 8
+  lower   = true
+  number  = true
+  upper   = false
+  special = false
+}
+
+resource "azurerm_app_service_plan" "free" {
+    count               = "${length(var.webapplocs)}"
+    name                = "plan-free-${var.webapplocs[count.index]}"
+    location            = "${var.webapplocs[count.index]}"
+    resource_group_name = "${azurerm_resource_group.webapps.name}"
+    tags                = "${azurerm_resource_group.webapps.tags}"
+
+    kind                = "Linux"
+    sku {
+        tier = "Free"
+        size = "F1"
+    }
+}
+
+resource "azurerm_app_service" "citadel" {
+    count               = "${length(var.webapplocs)}"
+    name                = "webapp-${random_string.webapprnd.result}-${var.webapplocs[count.index]}"
+    location            = "${var.webapplocs[count.index]}"
+    resource_group_name = "${azurerm_resource_group.webapps.name}"
+    tags                = "${azurerm_resource_group.webapps.tags}"
+
+    app_service_plan_id = "${element(azurerm_app_service_plan.free.*.id, count.index)}"
+}
+
+output "webapp_ids" {
+  description = "ids of the provisoned webapps"
+  value       = "${azurerm_app_service.citadel.*.id}"
 }
